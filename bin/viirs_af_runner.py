@@ -97,16 +97,14 @@ def spawn_cspp(sdrfiles, **kwargs):
     platform_name = kwargs.get('platform_name')
 
     LOG.info("Start CSPP: SDR files = " + str(sdrfiles))
-    working_dir = run_cspp(*sdrfiles)
+    working_dir = run_cspp_viirs_af(*sdrfiles)
     LOG.info("CSPP SDR processing finished...")
     # Assume everything has gone well!
-    new_result_files = get_sdr_files(working_dir, platform_name=platform_name)
-    LOG.info("SDR file names: %s", str([os.path.basename(f) for f in new_result_files]))
-    if len(new_result_files) == 0:
+    result_files = get_sdr_files(working_dir, platform_name=platform_name)
+    LOG.info("SDR file names: %s", str([os.path.basename(f) for f in result_files]))
+    if len(result_files) == 0:
         LOG.warning("No SDR files available. CSPP probably failed!")
         return working_dir, []
-
-    return working_dir, new_result_files
 
     LOG.info("Number of results files = " + str(len(result_files)))
     return working_dir, result_files
@@ -114,28 +112,47 @@ def spawn_cspp(sdrfiles, **kwargs):
 
 def viirs_active_fire_runner(options, service_name):
     """The live runner for the CSPP VIIRS AF product generation"""
+    from multiprocessing import cpu_count
 
     LOG.info("Start the VIIRS active fire runner...")
     LOG.debug("Listens for messages of type: %s", str(options['message_types']))
+
+    ncpus_available = cpu_count()
+    LOG.info("Number of CPUs available = " + str(ncpus_available))
+    ncpus = int(OPTIONS.get('ncpus', 1))
+    LOG.info("Will use %d CPUs when running the CSPP VIIRS Active Fires instances", ncpus)
+    viirs_af_proc = ViirsActiveFiresProcessor(ncpus)
+
     with posttroll.subscriber.Subscribe('', options['message_types'], True) as subscr:
         with Publish('viirs_active_fire_runner', 0) as publisher:
-            file_reg = {}
-            for msg in subscr.recv():
-                file_reg = start_product_filtering(
-                    file_reg, msg, options, publisher=publisher)
-                # Cleanup in file registry (keep only the last 5):
-                keys = file_reg.keys()
-                if len(keys) > 5:
-                    keys.sort()
-                    file_reg.pop(keys[0])
 
-    #viirs_sdr_dir = "/data/temp/AdamD/xxx/noaa20_20190423_0205_07388"
-    #viirs_sdr_dir = "/data/temp/AdamD/xxx/noaa20_20190423_1017_07393"
-    viirs_sdr_dir = "/data/lang/proj/safworks/fires2019/npp_20190424_1046_38804/"
-    if service_name == "viirs-mbands":
-        run_cspp_viirs_af(viirs_sdr_dir, mbands=True)
-    elif service_name == "viirs-ibands":
-        run_cspp_viirs_af(viirs_sdr_dir, mbands=False)
+            while True:
+                viirs_af_proc.initialise()
+                for msg in subscr.recv(timeout=300):
+                    status = viirs_af_proc.run(msg)
+                    if not status:
+                        break  # end the loop and reinitialize !
+
+                LOG.debug(
+                    "Received message data = %s", str(viirs_af_proc.message_data))
+                tobj = viirs_proc.pass_start_time
+                LOG.info("Time used in sub-dir name: " +
+                         str(tobj.strftime("%Y-%m-%d %H:%M")))
+
+                LOG.info("Get the results from the multiptocessing pool-run")
+                for res in viirs_af_proc.cspp_results:
+                    working_dir, tmp_result_files = res.get()
+                    viirs_af_proc.result_files = tmp_result_files
+
+                    # Here cleanup and publish...
+
+    # #viirs_sdr_dir = "/data/temp/AdamD/xxx/noaa20_20190423_0205_07388"
+    # #viirs_sdr_dir = "/data/temp/AdamD/xxx/noaa20_20190423_1017_07393"
+    # viirs_sdr_dir = "/data/lang/proj/safworks/fires2019/npp_20190424_1046_38804/"
+    # if service_name == "viirs-mbands":
+    #     run_cspp_viirs_af(viirs_sdr_dir, mbands=True)
+    # elif service_name == "viirs-ibands":
+    #     run_cspp_viirs_af(viirs_sdr_dir, mbands=False)
 
     return
 
