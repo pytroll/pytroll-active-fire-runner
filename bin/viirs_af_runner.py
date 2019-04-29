@@ -30,6 +30,23 @@ import os
 import sys
 from glob import glob
 from active_fires import get_config
+import posttroll.subscriber
+from posttroll.publisher import Publish
+from posttroll.message import Message
+import socket
+import netifaces
+import six
+import time
+
+if six.PY2:
+    from urlparse import urlparse
+elif six.PY3:
+    from urllib.parse import urlparse
+
+if six.PY2:
+    ptimer = time.clock
+elif six.PY3:
+    ptimer = time.perf_counter
 
 #: Default time format
 _DEFAULT_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
@@ -42,6 +59,17 @@ PATH = os.environ.get('PATH', '')
 CSPP_AF_HOME = os.environ.get("CSPP_ACTIVE_FIRE_HOME", '')
 CSPP_AF_WORKDIR = os.environ.get("CSPP_ACTIVE_FIRE_WORKDIR", '')
 # APPL_HOME = os.environ.get('NPP_SDRPROC', '')
+
+
+def get_local_ips():
+    inet_addrs = [netifaces.ifaddresses(iface).get(netifaces.AF_INET)
+                  for iface in netifaces.interfaces()]
+    ips = []
+    for addr in inet_addrs:
+        if addr is not None:
+            for add in addr:
+                ips.append(add['addr'])
+    return ips
 
 
 class ViirsActiveFiresProcessor(object):
@@ -60,6 +88,7 @@ class ViirsActiveFiresProcessor(object):
         self.cspp_results = []
         self.pass_start_time = None
         self.result_files = []
+        self.sdr_files = []
         self.message_data = None
 
     def initialise(self):
@@ -67,6 +96,7 @@ class ViirsActiveFiresProcessor(object):
         self.cspp_results = []
         self.pass_start_time = None
         self.result_files = []
+        self.sdr_files = []
 
     def pack_output_files(self, subd):
         pass
@@ -76,38 +106,79 @@ class ViirsActiveFiresProcessor(object):
 
         if msg:
             LOG.debug("Received message: " + str(msg))
-        else:
+        elif msg and ('platform_name' not in msg.data or 'sensor' not in msg.data):
+            LOG.debug("No platform_name or sensor in message. Continue...")
+            return True
+        elif msg and not (msg.data['platform_name'] in VIIRS_SATELLITES and
+                          msg.data['sensor'] == 'viirs'):
+            LOG.info("Not a VIIRS scene. Continue...")
             return True
 
-        self.cspp_results.append(self.pool.apply_async(spawn_cspp, self.result_files))
+        self.platform_name = str(msg.data['platform_name'])
+        self.sensor = str(msg.data['sensor'])
+        self.message_data = msg.data
+
+        if msg.type != 'dataset':
+            LOG.info("Not a dataset, don't do anything...")
+            return True
+
+        sdr_dataset = msg.data['dataset']
+
+        if len(sdr_dataset) < 1:
+            return True
+
+        # sdr = sdr_dataset[0]
+        # urlobj = urlparse(sdr['uri'])
+        # LOG.debug("Server = " + str(urlobj.netloc))
+        # url_ip = socket.gethostbyname(urlobj.netloc)
+        # if url_ip not in get_local_ips():
+        #     LOG.warning(
+        #         "Server %s not the current one: %s" % (str(urlobj.netloc),
+        #                                                socket.gethostname()))
+        #     return True
+
+        sdr_files = []
+        for sdr in sdr_dataset:
+            urlobj = urlparse(sdr['uri'])
+            sdr_filename = urlobj.path
+            # dummy, fname = os.path.split(rdr_filename)
+            # Assume all files are valid sdr files ending with '.h5'
+            sdr_files.append(sdr_filename)
+
+        self.sdr_files = sdr_files
+
+        self.cspp_results.append(self.pool.apply_async(spawn_cspp, (self.sdr_files, )))
         LOG.debug("Inside run: Return with a False...")
         return False
 
 
-def spawn_cspp(sdrfiles, **kwargs):
+def spawn_cspp(sdrfiles):
     """Spawn a CSPP AF run on the set of SDR files given"""
 
-    start_time = kwargs.get('start_time')
-    platform_name = kwargs.get('platform_name')
-
     LOG.info("Start CSPP: SDR files = " + str(sdrfiles))
-    working_dir = run_cspp_viirs_af(*sdrfiles)
+    working_dir = run_cspp_viirs_af(sdrfiles)
     LOG.info("CSPP SDR processing finished...")
     # Assume everything has gone well!
-    result_files = get_sdr_files(working_dir, platform_name=platform_name)
-    LOG.info("SDR file names: %s", str([os.path.basename(f) for f in result_files]))
-    if len(result_files) == 0:
-        LOG.warning("No SDR files available. CSPP probably failed!")
-        return working_dir, []
 
-    LOG.info("Number of results files = " + str(len(result_files)))
-    return working_dir, result_files
+    # Here, collect the result files for publication...
+    #
+    #
+
+    # result_files = get_af_files(working_dir, platform_name=platform_name)
+    # LOG.info("Active Fires results - file names: %s", str([os.path.basename(f) for f in result_files]))
+    # if len(result_files) == 0:
+    #     LOG.warning("No files available. CSPP probably failed!")
+    #     return working_dir, []
+
+    # LOG.info("Number of results files = " + str(len(result_files)))
+    # return working_dir, result_files
+
+    return [], []
 
 
 def viirs_active_fire_runner(options, service_name):
     """The live runner for the CSPP VIIRS AF product generation"""
     from multiprocessing import cpu_count
-    import posttroll.subscriber
 
     LOG.info("Start the VIIRS active fire runner...")
     LOG.debug("Listens for messages of type: %s", str(options['message_types']))
@@ -130,16 +201,17 @@ def viirs_active_fire_runner(options, service_name):
 
                 LOG.debug(
                     "Received message data = %s", str(viirs_af_proc.message_data))
-                tobj = viirs_proc.pass_start_time
-                LOG.info("Time used in sub-dir name: " +
-                         str(tobj.strftime("%Y-%m-%d %H:%M")))
+
+                #tobj = viirs_af_proc.pass_start_time
+                # LOG.info("Time used in sub-dir name: " +
+                #         str(tobj.strftime("%Y-%m-%d %H:%M")))
 
                 LOG.info("Get the results from the multiptocessing pool-run")
                 for res in viirs_af_proc.cspp_results:
                     working_dir, tmp_result_files = res.get()
                     viirs_af_proc.result_files = tmp_result_files
 
-                    # Here cleanup and publish...
+                # Here cleanup and publish...
 
     # #viirs_sdr_dir = "/data/temp/AdamD/xxx/noaa20_20190423_0205_07388"
     # #viirs_sdr_dir = "/data/temp/AdamD/xxx/noaa20_20190423_1017_07393"
@@ -152,7 +224,7 @@ def viirs_active_fire_runner(options, service_name):
     return
 
 
-def run_cspp_viirs_af(viirs_sdr_dir, mbands=True):
+def run_cspp_viirs_af(viirs_sdr_files, mbands=True):
     """A wrapper for the CSPP VIIRS Active Fire algorithm"""
 
     from subprocess import Popen, PIPE, STDOUT
@@ -169,12 +241,15 @@ def run_cspp_viirs_af(viirs_sdr_dir, mbands=True):
     cmdlist.extend(['-d', '-W', working_dir, '--num-cpu', '%d' % int(OPTIONS.get('num_of_cpus', 4))])
     if mbands:
         cmdlist.extend(['-M'])
-        cmdlist.extend(glob(os.path.join(viirs_sdr_dir, 'GMTCO*.h5')))
+        #cmdlist.extend(glob(os.path.join(viirs_sdr_dir, 'GMTCO*.h5')))
     else:
         # I-bands:
-        cmdlist.extend([viirs_sdr_dir])
+        # cmdlist.extend([viirs_sdr_dir])
+        pass
 
-    t0_clock = time.clock()
+    cmdlist.extend(viirs_sdr_files)
+
+    t0_clock = ptimer()
     t0_wall = time.time()
     LOG.info("Popen call arguments: " + str(cmdlist))
 
@@ -187,17 +262,18 @@ def run_cspp_viirs_af(viirs_sdr_dir, mbands=True):
         line = viirs_af_proc.stdout.readline()
         if not line:
             break
-        LOG.info(line.strip('\n'))
+        LOG.info(line.strip())
 
     while True:
         errline = viirs_af_proc.stderr.readline()
         if not errline:
             break
-        LOG.info(errline.strip('\n'))
-    LOG.info("Seconds process time: " + str(time.clock() - t0_clock))
-    LOG.info("Seconds wall clock time: " + str(time.time() - t0_wall))
+        LOG.info(errline.strip())
 
     viirs_af_proc.poll()
+
+    LOG.info("Seconds process time: " + str(ptimer() - t0_clock))
+    LOG.info("Seconds wall clock time: " + str(time.time() - t0_wall))
 
     return working_dir
 
