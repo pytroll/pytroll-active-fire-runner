@@ -33,7 +33,8 @@ from datetime import datetime, timedelta
 from urlparse import urlunsplit
 import socket
 import netifaces
-from viirs_af_runner import get_config
+
+from active_fires import get_config
 
 #: Default time format
 _DEFAULT_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
@@ -48,13 +49,93 @@ CSPP_AF_WORKDIR = os.environ.get("CSPP_ACTIVE_FIRE_WORKDIR", '')
 # APPL_HOME = os.environ.get('NPP_SDRPROC', '')
 
 
+class ViirsActiveFiresProcessor(object):
+
+    """
+    Container for the VIIRS Active Fires processing based on CSPP
+
+    """
+
+    def __init__(self, ncpus):
+        from multiprocessing.pool import ThreadPool
+        self.pool = ThreadPool(ncpus)
+        self.ncpus = ncpus
+
+        self.platform_name = 'unknown'  # Ex.: Suomi-NPP
+        self.cspp_results = []
+        self.pass_start_time = None
+        self.result_files = []
+        self.sdr_home = OPTIONS['level1_home']
+        self.message_data = None
+
+    def initialise(self):
+        """Initialise the processor"""
+        self.cspp_results = []
+        self.pass_start_time = None
+        self.result_files = []
+
+    def pack_output_files(self, subd):
+        pass
+
+    def run(self, msg):
+        """Start the VIIRS Active Fires processing using CSPP on one sdr granule"""
+
+        if msg:
+            LOG.debug("Received message: " + str(msg))
+        else:
+            return True
+
+        self.cspp_results.append(self.pool.apply_async(spawn_cspp, self.result_files))
+        LOG.debug("Inside run: Return with a False...")
+        return False
+
+
+def spawn_cspp(sdrfiles, **kwargs):
+    """Spawn a CSPP AF run on the set of SDR files given"""
+
+    start_time = kwargs.get('start_time')
+    platform_name = kwargs.get('platform_name')
+
+    LOG.info("Start CSPP: SDR files = " + str(sdrfiles))
+    working_dir = run_cspp(*sdrfiles)
+    LOG.info("CSPP SDR processing finished...")
+    # Assume everything has gone well!
+    new_result_files = get_sdr_files(working_dir, platform_name=platform_name)
+    LOG.info("SDR file names: %s", str([os.path.basename(f) for f in new_result_files]))
+    if len(new_result_files) == 0:
+        LOG.warning("No SDR files available. CSPP probably failed!")
+        return working_dir, []
+
+    return working_dir, new_result_files
+
+    LOG.info("Number of results files = " + str(len(result_files)))
+    return working_dir, result_files
+
+
 def viirs_active_fire_runner(options, service_name):
     """The live runner for the CSPP VIIRS AF product generation"""
 
     LOG.info("Start the VIIRS active fire runner...")
+    LOG.debug("Listens for messages of type: %s", str(options['message_types']))
+    with posttroll.subscriber.Subscribe('', options['message_types'], True) as subscr:
+        with Publish('viirs_active_fire_runner', 0) as publisher:
+            file_reg = {}
+            for msg in subscr.recv():
+                file_reg = start_product_filtering(
+                    file_reg, msg, options, publisher=publisher)
+                # Cleanup in file registry (keep only the last 5):
+                keys = file_reg.keys()
+                if len(keys) > 5:
+                    keys.sort()
+                    file_reg.pop(keys[0])
 
-    viirs_sdr_dir = "/data/temp/AdamD/jpss/noaa20_20190423_0205_07388"
-    run_cspp_viirs_af(viirs_sdr_dir, mbands=True)
+    #viirs_sdr_dir = "/data/temp/AdamD/xxx/noaa20_20190423_0205_07388"
+    #viirs_sdr_dir = "/data/temp/AdamD/xxx/noaa20_20190423_1017_07393"
+    viirs_sdr_dir = "/data/lang/proj/safworks/fires2019/npp_20190424_1046_38804/"
+    if service_name == "viirs-mbands":
+        run_cspp_viirs_af(viirs_sdr_dir, mbands=True)
+    elif service_name == "viirs-ibands":
+        run_cspp_viirs_af(viirs_sdr_dir, mbands=False)
 
     return
 
@@ -66,40 +147,47 @@ def run_cspp_viirs_af(viirs_sdr_dir, mbands=True):
     import time
     import tempfile
 
-    viirs_sdr_call = OPTIONS['viirs_af_call']
+    viirs_af_call = OPTIONS['viirs_af_call']
     try:
         working_dir = tempfile.mkdtemp(dir=CSPP_AF_WORKDIR)
     except OSError:
         working_dir = tempfile.mkdtemp()
 
     cmdlist = [viirs_af_call]
-    cmdlist.extend('--num-cpu %d' % OPTIONS.get('num_of_cpus', 4))
+    cmdlist.extend(['-d', '-W', working_dir, '--num-cpu', '%d' % int(OPTIONS.get('num_of_cpus', 4))])
     if mbands:
-        cmdlist.extend('-M %s' % os.path.join(viirs_sdr_dir, 'GMTCO*.h5'))
+        cmdlist.extend(['-M'])
+        cmdlist.extend(glob(os.path.join(viirs_sdr_dir, 'GMTCO*.h5')))
+    else:
+        # I-bands:
+        cmdlist.extend([viirs_sdr_dir])
 
     t0_clock = time.clock()
     t0_wall = time.time()
     LOG.info("Popen call arguments: " + str(cmdlist))
 
-    # viirs_sdr_proc = Popen(cmdlist,
-    #                        cwd=working_dir,
-    #                        stderr=PIPE, stdout=PIPE)
-    # while True:
-    #     line = viirs_sdr_proc.stdout.readline()
-    #     if not line:
-    #         break
-    #     LOG.info(line.strip('\n'))
+    my_env = os.environ.copy()
+    viirs_af_proc = Popen(cmdlist,
+                          cwd=working_dir,
+                          shell=False, env=my_env,
+                          stderr=PIPE, stdout=PIPE)
+    while True:
+        line = viirs_af_proc.stdout.readline()
+        if not line:
+            break
+        LOG.info(line.strip('\n'))
 
-    # while True:
-    #     errline = viirs_sdr_proc.stderr.readline()
-    #     if not errline:
-    #         break
-    #     LOG.info(errline.strip('\n'))
-    # LOG.info("Seconds process time: " + str(time.clock() - t0_clock))
-    # LOG.info("Seconds wall clock time: " + str(time.time() - t0_wall))
+    while True:
+        errline = viirs_af_proc.stderr.readline()
+        if not errline:
+            break
+        LOG.info(errline.strip('\n'))
+    LOG.info("Seconds process time: " + str(time.clock() - t0_clock))
+    LOG.info("Seconds wall clock time: " + str(time.time() - t0_wall))
 
-    # viirs_sdr_proc.poll()
-    # return working_dir
+    viirs_af_proc.poll()
+
+    return working_dir
 
 
 def get_arguments():
@@ -179,4 +267,4 @@ if __name__ == "__main__":
     OPTIONS['nagios_config_file'] = nagios_config_file
 
     LOG = logging.getLogger('viirs-active-fire-runner')
-    viirs_active_fire_runner(OPTIONS)
+    viirs_active_fire_runner(OPTIONS, service_name)

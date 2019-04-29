@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright (c) 2019 Adam.Dybbroe
+# Copyright (c) 2019 Pytroll
 
 # Author(s):
 
-#   Adam.Dybbroe <a000680@c21529.ad.smhi.se>
+#   Adam.Dybbroe <adam.dybbroe@smhi.se>
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -28,9 +28,9 @@ from setuptools import setup
 import imp
 
 version = imp.load_source(
-    'viirs_af_runner.version', 'viirs_af_runner/version.py')
+    'active_fires.version', 'active_fires/version.py')
 
-setup(name="viirs_af_runner",
+setup(name="active_fires",
       version=version.__version__,
       description='Pytroll runner for the VIIRS active fires',
       author='Adam Dybroe',
@@ -43,7 +43,7 @@ setup(name="viirs_af_runner",
                    "Programming Language :: Python",
                    "Topic :: Scientific/Engineering"],
       url="https://github.com/pytroll/pytroll-active-fire-runner",
-      packages=['viirs_af_runner', ],
+      packages=['active_fires', ],
       scripts=['bin/viirs_af_runner.py', ],
       data_files=[],
       zip_safe=False,
