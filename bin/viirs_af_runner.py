@@ -29,11 +29,6 @@ import logging
 import os
 import sys
 from glob import glob
-from datetime import datetime, timedelta
-from urlparse import urlunsplit
-import socket
-import netifaces
-
 from active_fires import get_config
 
 #: Default time format
@@ -65,7 +60,6 @@ class ViirsActiveFiresProcessor(object):
         self.cspp_results = []
         self.pass_start_time = None
         self.result_files = []
-        self.sdr_home = OPTIONS['level1_home']
         self.message_data = None
 
     def initialise(self):
@@ -113,6 +107,7 @@ def spawn_cspp(sdrfiles, **kwargs):
 def viirs_active_fire_runner(options, service_name):
     """The live runner for the CSPP VIIRS AF product generation"""
     from multiprocessing import cpu_count
+    import posttroll.subscriber
 
     LOG.info("Start the VIIRS active fire runner...")
     LOG.debug("Listens for messages of type: %s", str(options['message_types']))
@@ -245,20 +240,20 @@ def get_arguments():
     args = parser.parse_args()
 
     if args.config_file == '':
-        print "Configuration file required! viirs_af_runner.py <file>"
+        print("Configuration file required! viirs_af_runner.py <file>")
         sys.exit()
     if args.environment == '':
-        print "Environment required! Use command-line switch -s <service name>"
+        print("Environment required! Use command-line switch -s <service name>")
         sys.exit()
     if args.service == '':
-        print "Service required! Use command-line switch -e <environment>"
+        print("Service required! Use command-line switch -e <environment>")
         sys.exit()
 
     service = args.service.lower()
     environment = args.environment.lower()
 
     if 'template' in args.config_file:
-        print "Template file given as master config, aborting!"
+        print("Template file given as master config, aborting!")
         sys.exit()
 
     return environment, service, args.config_file, args.nagios_file
