@@ -157,7 +157,7 @@ def spawn_cspp(sdrfiles):
 
     LOG.info("Start CSPP: SDR files = " + str(sdrfiles))
     working_dir = run_cspp_viirs_af(sdrfiles)
-    LOG.info("CSPP SDR processing finished...")
+    LOG.info("CSPP SDR Active Fires processing finished...")
     # Assume everything has gone well!
 
     # Here, collect the result files for publication...
