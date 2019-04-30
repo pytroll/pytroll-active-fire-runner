@@ -3,6 +3,7 @@ log_rotation_backup: 10
 
 tle_dir: /data/24/saf/polar_in/tle
 tlefilename: tle-{time:%Y%m%d%H%M}.txt
+site: nrk
 
 viirs-ibands:
 
@@ -13,25 +14,16 @@ viirs-ibands:
   viirs_af_call: cspp_active_fire_noaa.sh
   num_of_cpus: 4
   offline:
-    sir_dir: /tmp
+    output_dir: /home/a000680/data/viirs_active_fires
 
   prod:
-    sir_dir: /data/24/sirux/sir/data
-    sir_local_dir: /san1/sir
-    mail_subscribers: satsamonitoring@smhi.se
-    mail_sender: safuser@smhi.se
+    output_dir: /data/24/saf/polar_out/viirs_active_fires
 
   test:
-    sir_dir: /data/prodtest/sirux/sir/data
-    sir_local_dir: /san1/sir
-    mail_subscribers: satsamonitoring@smhi.se
-    mail_sender: safusr.t@smhi.se
+    output_dir: /data/prodtest/saf/polar_out/viirs_active_fires
 
   utv:
-    sir_dir: /data/proj/siruxv/sir/data
-    sir_local_dir: /san1/sir
-    mail_subscribers: adam.dybbroe@smhi.se
-    mail_sender: safusr.u@smhi.se
+    output_dir: /data/proj/safutv/polar_out/viirs_active_fires
 
 
 viirs-mbands:
@@ -43,22 +35,14 @@ viirs-mbands:
   viirs_af_call: cspp_active_fire_noaa.sh
   num_of_cpus: 4
   offline:
-    sir_dir: /tmp
+    output_dir: /home/a000680/data/viirs_active_fires
 
   prod:
-    sir_dir: /data/24/sirux/sir/data
-    sir_local_dir: /san1/sir
-    mail_subscribers: satsamonitoring@smhi.se
-    mail_sender: safuser@smhi.se
+    output_dir: /data/24/saf/polar_out/viirs_active_fires
 
   test:
-    sir_dir: /data/prodtest/sirux/sir/data
-    sir_local_dir: /san1/sir
-    mail_subscribers: satsamonitoring@smhi.se
-    mail_sender: safusr.t@smhi.se
+    output_dir: /data/prodtest/saf/polar_out/viirs_active_fires
 
   utv:
-    sir_dir: /data/proj/siruxv/sir/data
-    sir_local_dir: /san1/sir
-    mail_subscribers: adam.dybbroe@smhi.se
-    mail_sender: safusr.u@smhi.se
+    output_dir: /data/proj/safutv/polar_out/viirs_active_fires
+
