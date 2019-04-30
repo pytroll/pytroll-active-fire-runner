@@ -37,6 +37,10 @@ import socket
 import netifaces
 import six
 import time
+from datetime import datetime
+import shutil
+import stat
+
 
 if six.PY2:
     from urlparse import urlparse
@@ -61,6 +65,36 @@ CSPP_AF_WORKDIR = os.environ.get("CSPP_ACTIVE_FIRE_WORKDIR", '')
 # APPL_HOME = os.environ.get('NPP_SDRPROC', '')
 
 
+def deliver_output_files(affiles, base_dir, subdir=None):
+    """Copy the Active Fire output files to the sub-directory under the *subdir* directory
+    structure"""
+
+    if subdir:
+        path = os.path.join(base_dir, subdir)
+    else:
+        path = base_dir
+
+    if not os.path.exists(path):
+        os.mkdir(path)
+
+    LOG.info("Number of Active Fire result files: " + str(len(affiles)))
+    retvl = []
+    for affile in affiles:
+        newfilename = os.path.join(path, os.path.basename(affile))
+        LOG.info("Copy affile to destination: " + newfilename)
+        if os.path.exists(affile):
+            LOG.info("File to copy: {file} <> ST_MTIME={time}".format(file=str(affile),
+                                                                      time=datetime.utcfromtimestamp(os.stat(affile)[stat.ST_MTIME]).strftime('%Y%m%d-%H%M%S')))
+        shutil.copy(affile, newfilename)
+        if os.path.exists(newfilename):
+            LOG.info("File at destination: {file} <> ST_MTIME={time}".format(file=str(newfilename),
+                                                                             time=datetime.utcfromtimestamp(os.stat(newfilename)[stat.ST_MTIME]).strftime('%Y%m%d-%H%M%S')))
+
+        retvl.append(newfilename)
+
+    return retvl
+
+
 def get_local_ips():
     inet_addrs = [netifaces.ifaddresses(iface).get(netifaces.AF_INET)
                   for iface in netifaces.interfaces()]
@@ -70,6 +104,30 @@ def get_local_ips():
             for add in addr:
                 ips.append(add['addr'])
     return ips
+
+
+def cleanup_cspp_workdir(workdir):
+    """Clean up the CSPP working dir after processing"""
+
+    filelist = glob('%s/*' % workdir)
+    dummy = [os.remove(s) for s in filelist if os.path.isfile(s)]
+    filelist = glob('%s/*' % workdir)
+    LOG.info(
+        "Number of items left after cleaning working dir = " + str(len(filelist)))
+    shutil.rmtree(workdir)
+    return
+
+
+def get_active_fire_result_files(res_dir):
+    """
+    Make alist of all result files that should be captured from the CSPP
+    work-dir for delivery
+    """
+
+    result_files = (glob(os.path.join(res_dir, 'AF*.nc')) +
+                    glob(os.path.join(res_dir, 'AF*.txt')))
+
+    return sorted(result_files)
 
 
 class ViirsActiveFiresProcessor(object):
@@ -84,11 +142,13 @@ class ViirsActiveFiresProcessor(object):
         self.pool = ThreadPool(ncpus)
         self.ncpus = ncpus
 
+        self.orbit_number = 1  # Initialised orbit number
         self.platform_name = 'unknown'  # Ex.: Suomi-NPP
         self.cspp_results = []
         self.pass_start_time = None
         self.result_files = []
         self.sdr_files = []
+        self.result_home = OPTIONS['output_dir']
         self.message_data = None
 
     def initialise(self):
@@ -98,8 +158,8 @@ class ViirsActiveFiresProcessor(object):
         self.result_files = []
         self.sdr_files = []
 
-    def pack_output_files(self, subd):
-        pass
+    def deliver_output_files(self, subd=None):
+        return deliver_output_files(self.result_files, self.result_home, subd)
 
     def run(self, msg):
         """Start the VIIRS Active Fires processing using CSPP on one sdr granule"""
@@ -160,20 +220,24 @@ def spawn_cspp(sdrfiles):
     LOG.info("CSPP SDR Active Fires processing finished...")
     # Assume everything has gone well!
 
-    # Here, collect the result files for publication...
-    #
-    #
+    result_files = get_active_fire_result_files(working_dir)
+    LOG.info("Active Fires results - file names: %s", str([os.path.basename(f) for f in result_files]))
+    if len(result_files) == 0:
+        LOG.warning("No files available. CSPP probably failed!")
+        return working_dir, []
 
-    # result_files = get_af_files(working_dir, platform_name=platform_name)
-    # LOG.info("Active Fires results - file names: %s", str([os.path.basename(f) for f in result_files]))
-    # if len(result_files) == 0:
-    #     LOG.warning("No files available. CSPP probably failed!")
-    #     return working_dir, []
+    LOG.info("Number of results files = " + str(len(result_files)))
+    return working_dir, result_files
 
-    # LOG.info("Number of results files = " + str(len(result_files)))
-    # return working_dir, result_files
 
-    return [], []
+def publish_sdr(publisher, result_files, mda, **kwargs):
+    """Publish the messages that SDR files are ready
+    """
+    if not result_files:
+        return
+
+    # Now publish:
+    LOG.info("Here we should publish the results...")
 
 
 def viirs_active_fire_runner(options, service_name):
@@ -202,16 +266,18 @@ def viirs_active_fire_runner(options, service_name):
                 LOG.debug(
                     "Received message data = %s", str(viirs_af_proc.message_data))
 
-                #tobj = viirs_af_proc.pass_start_time
-                # LOG.info("Time used in sub-dir name: " +
-                #         str(tobj.strftime("%Y-%m-%d %H:%M")))
-
                 LOG.info("Get the results from the multiptocessing pool-run")
                 for res in viirs_af_proc.cspp_results:
                     working_dir, tmp_result_files = res.get()
                     viirs_af_proc.result_files = tmp_result_files
+                    af_files = viirs_af_proc.deliver_output_files()
+                    LOG.info("Cleaning up directory %s", working_dir)
+                    cleanup_cspp_workdir(working_dir)
+                    publish_sdr(publisher, af_files,
+                                viirs_af_proc.message_data,
+                                orbit=viirs_af_proc.orbit_number)
 
-                # Here cleanup and publish...
+                LOG.info("Now that SDR processing has completed.")
 
     # #viirs_sdr_dir = "/data/temp/AdamD/xxx/noaa20_20190423_0205_07388"
     # #viirs_sdr_dir = "/data/temp/AdamD/xxx/noaa20_20190423_1017_07393"
