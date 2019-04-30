@@ -34,13 +34,11 @@ import posttroll.subscriber
 from posttroll.publisher import Publish
 from posttroll.message import Message
 import socket
-import netifaces
 import six
 import time
-from datetime import datetime
-import shutil
-import stat
 
+from active_fires.utils import (deliver_output_files, get_local_ips, cleanup_cspp_workdir,
+                                get_edr_times, get_active_fire_result_files)
 
 if six.PY2:
     from urlparse import urlparse
@@ -64,87 +62,6 @@ PATH = os.environ.get('PATH', '')
 
 CSPP_AF_HOME = os.environ.get("CSPP_ACTIVE_FIRE_HOME", '')
 CSPP_AF_WORKDIR = os.environ.get("CSPP_ACTIVE_FIRE_WORKDIR", '')
-# APPL_HOME = os.environ.get('NPP_SDRPROC', '')
-
-
-def deliver_output_files(affiles, base_dir, subdir=None):
-    """Copy the Active Fire output files to the sub-directory under the *subdir* directory
-    structure"""
-
-    if subdir:
-        path = os.path.join(base_dir, subdir)
-    else:
-        path = base_dir
-
-    if not os.path.exists(path):
-        os.mkdir(path)
-
-    LOG.info("Number of Active Fire result files: " + str(len(affiles)))
-    retvl = []
-    for affile in affiles:
-        newfilename = os.path.join(path, os.path.basename(affile))
-        LOG.info("Copy affile to destination: " + newfilename)
-        if os.path.exists(affile):
-            LOG.info("File to copy: {file} <> ST_MTIME={time}".format(file=str(affile),
-                                                                      time=datetime.utcfromtimestamp(os.stat(affile)[stat.ST_MTIME]).strftime('%Y%m%d-%H%M%S')))
-        shutil.copy(affile, newfilename)
-        if os.path.exists(newfilename):
-            LOG.info("File at destination: {file} <> ST_MTIME={time}".format(file=str(newfilename),
-                                                                             time=datetime.utcfromtimestamp(os.stat(newfilename)[stat.ST_MTIME]).strftime('%Y%m%d-%H%M%S')))
-
-        retvl.append(newfilename)
-
-    return retvl
-
-
-def get_local_ips():
-    inet_addrs = [netifaces.ifaddresses(iface).get(netifaces.AF_INET)
-                  for iface in netifaces.interfaces()]
-    ips = []
-    for addr in inet_addrs:
-        if addr is not None:
-            for add in addr:
-                ips.append(add['addr'])
-    return ips
-
-
-def cleanup_cspp_workdir(workdir):
-    """Clean up the CSPP working dir after processing"""
-
-    filelist = glob('%s/*' % workdir)
-    dummy = [os.remove(s) for s in filelist if os.path.isfile(s)]
-    filelist = glob('%s/*' % workdir)
-    LOG.info(
-        "Number of items left after cleaning working dir = " + str(len(filelist)))
-    shutil.rmtree(workdir)
-    return
-
-
-def get_edr_times(filename):
-    """Get the start and end times from the SDR file name
-    """
-    bname = os.path.basename(filename)
-    sll = bname.split('_')
-    start_time = datetime.strptime(sll[2] + sll[3][:-1],
-                                   "d%Y%m%dt%H%M%S")
-    end_time = datetime.strptime(sll[2] + sll[4][:-1],
-                                 "d%Y%m%de%H%M%S")
-    if end_time < start_time:
-        end_time += timedelta(days=1)
-
-    return start_time, end_time
-
-
-def get_active_fire_result_files(res_dir):
-    """
-    Make alist of all result files that should be captured from the CSPP
-    work-dir for delivery
-    """
-
-    result_files = (glob(os.path.join(res_dir, 'AF*.nc')) +
-                    glob(os.path.join(res_dir, 'AF*.txt')))
-
-    return sorted(result_files)
 
 
 class ViirsActiveFiresProcessor(object):
