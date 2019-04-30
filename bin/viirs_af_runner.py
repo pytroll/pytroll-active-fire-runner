@@ -284,10 +284,10 @@ def run_cspp_viirs_af(viirs_sdr_files, service):
     cmdlist.extend(['-d', '-W', working_dir, '--num-cpu', '%d' % int(OPTIONS.get('num_of_cpus', 4))])
     if service == 'viirs-mbands':
         cmdlist.extend(['-M'])
-        LOG.info("M-bands", service)
+        LOG.info("M-bands: %s", service)
     elif service == 'viirs-ibands':
         # I-bands:
-        LOG.info("I-bands", service)
+        LOG.info("I-bands %s", service)
     else:
         LOG.warning("Service not recognized: %s - Assume I-bands", service)
 
