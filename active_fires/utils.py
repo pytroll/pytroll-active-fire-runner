@@ -60,7 +60,10 @@ def deliver_output_files(affiles, base_dir, subdir=None):
     else:
         path = base_dir
 
+    LOG.debug("Path: %s", str(path))
+
     if not os.path.exists(path):
+        LOG.warning("Directory does not exist - create it: %s", path)
         os.mkdir(path)
 
     LOG.info("Number of Active Fire result files: " + str(len(affiles)))

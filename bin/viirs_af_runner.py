@@ -82,7 +82,7 @@ class ViirsActiveFiresProcessor(object):
         self.pass_start_time = None
         self.result_files = []
         self.sdr_files = []
-        self.result_home = OPTIONS.get('output_dir')
+        self.result_home = OPTIONS.get('output_dir', '/tmp')
         self.publish_topic = OPTIONS.get('publish_topic')
         self.site = OPTIONS.get('site', 'unknown')
         self.environment = OPTIONS.get('environment')
