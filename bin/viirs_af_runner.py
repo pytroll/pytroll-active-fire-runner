@@ -87,13 +87,15 @@ class ViirsActiveFiresProcessor(object):
         self.site = OPTIONS.get('site', 'unknown')
         self.environment = OPTIONS.get('environment')
         self.message_data = None
+        self.service = None
 
-    def initialise(self):
+    def initialise(self, service):
         """Initialise the processor"""
         self.cspp_results = []
         self.pass_start_time = None
         self.result_files = []
         self.sdr_files = []
+        self.service = service
 
     def deliver_output_files(self, subd=None):
         return deliver_output_files(self.result_files, self.result_home, subd)
@@ -144,16 +146,16 @@ class ViirsActiveFiresProcessor(object):
 
         self.sdr_files = sdr_files
 
-        self.cspp_results.append(self.pool.apply_async(spawn_cspp, (self.sdr_files, )))
+        self.cspp_results.append(self.pool.apply_async(spawn_cspp, (self.sdr_files, self.service)))
         LOG.debug("Inside run: Return with a False...")
         return False
 
 
-def spawn_cspp(sdrfiles):
+def spawn_cspp(sdrfiles, service):
     """Spawn a CSPP AF run on the set of SDR files given"""
 
     LOG.info("Start CSPP: SDR files = " + str(sdrfiles))
-    working_dir = run_cspp_viirs_af(sdrfiles)
+    working_dir = run_cspp_viirs_af(sdrfiles, service)
     LOG.info("CSPP SDR Active Fires processing finished...")
     # Assume everything has gone well!
 
@@ -236,8 +238,9 @@ def viirs_active_fire_runner(options, service_name):
         with Publish('viirs_active_fire_runner', 0) as publisher:
 
             while True:
-                viirs_af_proc.initialise()
-                for msg in subscr.recv(timeout=300):
+                viirs_af_proc.initialise(service_name)
+                # for msg in subscr.recv(timeout=300):
+                for msg in subscr.recv():
                     status = viirs_af_proc.run(msg)
                     if not status:
                         break  # end the loop and reinitialize !
@@ -259,12 +262,12 @@ def viirs_active_fire_runner(options, service_name):
                                environment=viirs_af_proc.environment,
                                site=viirs_af_proc.site)
 
-                LOG.info("Now that SDR processing has completed.")
+                LOG.info("SDR processing has completed.")
 
     return
 
 
-def run_cspp_viirs_af(viirs_sdr_files, mbands=True):
+def run_cspp_viirs_af(viirs_sdr_files, service):
     """A wrapper for the CSPP VIIRS Active Fire algorithm"""
 
     from subprocess import Popen, PIPE, STDOUT
@@ -279,13 +282,14 @@ def run_cspp_viirs_af(viirs_sdr_files, mbands=True):
 
     cmdlist = [viirs_af_call]
     cmdlist.extend(['-d', '-W', working_dir, '--num-cpu', '%d' % int(OPTIONS.get('num_of_cpus', 4))])
-    if mbands:
+    if service == 'viirs-mbands':
         cmdlist.extend(['-M'])
-        #cmdlist.extend(glob(os.path.join(viirs_sdr_dir, 'GMTCO*.h5')))
-    else:
+        LOG.info("M-bands", service)
+    elif service == 'viirs-ibands':
         # I-bands:
-        # cmdlist.extend([viirs_sdr_dir])
-        pass
+        LOG.info("I-bands", service)
+    else:
+        LOG.warning("Service not recognized: %s - Assume I-bands", service)
 
     cmdlist.extend(viirs_sdr_files)
 
