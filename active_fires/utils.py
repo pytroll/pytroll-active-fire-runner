@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright (c) 2019 Adam.Dybbroe
+# Copyright (c) 2019 Pytroll
 
 # Author(s):
 
-#   Adam.Dybbroe <a000680@c21529.ad.smhi.se>
+#   Adam Dybbroe <Firstname.Lastname@smhi.se>
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -55,6 +55,8 @@ def deliver_output_files(affiles, base_dir, subdir=None):
     """Copy the Active Fire output files to the sub-directory under the *subdir* directory
     structure"""
 
+    LOG.debug("base_dir: %s", base_dir)
+
     if subdir:
         path = os.path.join(base_dir, subdir)
     else:
@@ -65,6 +67,8 @@ def deliver_output_files(affiles, base_dir, subdir=None):
     if not os.path.exists(path):
         LOG.warning("Directory does not exist - create it: %s", path)
         os.mkdir(path)
+    else:
+        LOG.debug("Directory exists: %s", path)
 
     LOG.info("Number of Active Fire result files: " + str(len(affiles)))
     retvl = []

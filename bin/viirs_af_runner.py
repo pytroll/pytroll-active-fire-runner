@@ -5,7 +5,7 @@
 
 # Author(s):
 
-#   Adam.Dybbroe <adam.dybbroe@smhi.se>
+#   Adam Dybbroe <Firstname.Lastname@smhi.se>
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -28,7 +28,6 @@ Fire outputs on I- and/or M-bands.
 import logging
 import os
 import sys
-from glob import glob
 from active_fires import get_config
 import posttroll.subscriber
 from posttroll.publisher import Publish
@@ -98,6 +97,9 @@ class ViirsActiveFiresProcessor(object):
         self.service = service
 
     def deliver_output_files(self, subd=None):
+        LOG.debug("Result files: %s", str(self.result_files))
+        LOG.debug("Result home dir: %s", str(self.result_home))
+        LOG.debug("Sub directory: %s", subd)
         return deliver_output_files(self.result_files, self.result_home, subd)
 
     def run(self, msg):
