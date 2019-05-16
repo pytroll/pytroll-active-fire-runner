@@ -28,9 +28,9 @@ from setuptools import setup
 import imp
 
 version = imp.load_source(
-    'active_fires.version', 'active_fires/version.py')
+    'viirs_active_fires.version', 'viirs_active_fires/version.py')
 
-setup(name="active_fires",
+setup(name="pytroll-active-fire-runner",
       version=version.__version__,
       description='Pytroll runner for the VIIRS active fires',
       author='Adam Dybroe',
@@ -43,7 +43,7 @@ setup(name="active_fires",
                    "Programming Language :: Python",
                    "Topic :: Scientific/Engineering"],
       url="https://github.com/pytroll/pytroll-active-fire-runner",
-      packages=['active_fires', ],
+      packages=['viirs_active_fires', ],
       scripts=['bin/viirs_af_runner.py', ],
       data_files=[],
       zip_safe=False,

@@ -36,8 +36,8 @@ import socket
 import six
 import time
 
-from active_fires.utils import (deliver_output_files, get_local_ips, cleanup_cspp_workdir,
-                                get_edr_times, get_active_fire_result_files)
+from viirs_active_fires.utils import (deliver_output_files, get_local_ips, cleanup_cspp_workdir,
+                                      get_edr_times, get_active_fire_result_files)
 
 if six.PY2:
     from urlparse import urlparse
