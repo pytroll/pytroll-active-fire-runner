@@ -28,11 +28,10 @@
 import logging
 import os
 from glob import glob
-import socket
 import netifaces
 import six
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import shutil
 import stat
 
