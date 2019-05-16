@@ -28,7 +28,7 @@ Fire outputs on I- and/or M-bands.
 import logging
 import os
 import sys
-from active_fires import get_config
+from viirs_active_fires import get_config
 import posttroll.subscriber
 from posttroll.publisher import Publish
 from posttroll.message import Message
