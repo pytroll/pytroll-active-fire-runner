@@ -36,8 +36,11 @@ import socket
 import six
 import time
 
+from trollsift.parser import compose
+
 from viirs_active_fires.utils import (deliver_output_files, get_local_ips, cleanup_cspp_workdir,
                                       get_edr_times, get_active_fire_result_files)
+
 
 if six.PY2:
     from urlparse import urlparse
@@ -209,18 +212,30 @@ def publish_af(publisher, result_files, mda, **kwargs):
     LOG.debug('Site = %s', site)
     LOG.debug('Publish topic = %s', publish_topic)
     for topic in publish_topic:
-        msg = Message('/'.join(('',
-                                topic,
-                                to_send['format'],
-                                to_send['data_processing_level'],
-                                site,
-                                environment,
-                                'polar',
-                                'direct_readout')),
-                      "dataset", to_send).encode()
+        # Assume if the publish topic in the config contains { and } this is meant to be
+        # a trollsift compose task.
+        if '{' and '}' in topic:
+            try:
+                pt = compose(topic, to_send)
+            except KeyError as ke:  # noqa
+                LOG.error("Sift topic failed: {} {} {}".format(topic, to_send, ke))
+                LOG.error("Be sure to only use available keys.")
+                raise
+        else:
+            pt = '/'.join(('',
+                           topic,
+                           to_send['format'],
+                           to_send['data_processing_level'],
+                           site,
+                           environment,
+                           'polar',
+                           'direct_readout'))
 
-    LOG.debug("sending: " + str(msg))
-    publisher.send(msg)
+        LOG.debug('Publish topic = %s', pt)
+        msg = Message(pt, "dataset", to_send).encode()
+
+        LOG.debug("sending: " + str(msg))
+        publisher.send(msg)
 
 
 def viirs_active_fire_runner(options, service_name):
@@ -235,8 +250,13 @@ def viirs_active_fire_runner(options, service_name):
     ncpus = int(OPTIONS.get('ncpus', 1))
     LOG.info("Will use %d CPUs when running the CSPP VIIRS Active Fires instances", ncpus)
     viirs_af_proc = ViirsActiveFiresProcessor(ncpus)
+    # If services are given in the config, subscribe only to theses services
+    # Else subscribe to all available services the nameserver provides.
+    services = OPTIONS.get('services', '')
+    if services:
+        LOG.debug("Subscribing to services: {}".format(services))
 
-    with posttroll.subscriber.Subscribe('', options['message_types'], True) as subscr:
+    with posttroll.subscriber.Subscribe(services, options['message_types'], True) as subscr:
         with Publish('viirs_active_fire_runner', 0) as publisher:
 
             while True:
