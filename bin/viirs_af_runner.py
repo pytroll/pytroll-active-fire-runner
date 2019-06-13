@@ -218,8 +218,8 @@ def publish_af(publisher, result_files, mda, **kwargs):
             try:
                 pt = compose(topic, to_send)
             except KeyError as ke:  # noqa
-                LOG.debug("Sift topic failed: {} {} {}".format(topic, to_send, ke))
-                LOG.debug("Be sure to only use available keys.")
+                LOG.error("Sift topic failed: {} {} {}".format(topic, to_send, ke))
+                LOG.error("Be sure to only use available keys.")
                 raise
         else:
             pt = '/'.join(('',
