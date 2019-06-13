@@ -252,7 +252,7 @@ def viirs_active_fire_runner(options, service_name):
     viirs_af_proc = ViirsActiveFiresProcessor(ncpus)
     # If services are given in the config, subscribe only to theses services
     # Else subscribe to all available services the nameserver provides.
-    services = OPTIONS.get('services', '').split(',')
+    services = OPTIONS.get('services', '')
     if services:
         LOG.debug("Subscribing to services: {}".format(services))
 
