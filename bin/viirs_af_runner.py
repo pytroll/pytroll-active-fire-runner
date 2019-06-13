@@ -222,14 +222,14 @@ def publish_af(publisher, result_files, mda, **kwargs):
                 LOG.debug("Be sure to only use available keys.")
                 raise
         else:
-            pt = '/'.join('',
+            pt = '/'.join(('',
                           topic,
                           to_send['format'],
                           to_send['data_processing_level'],
                           site,
                           environment,
                           'polar',
-                          'direct_readout')
+                          'direct_readout'))
 
         LOG.debug('Publish topic = %s', pt)
         msg = Message(pt, "dataset", to_send).encode()
