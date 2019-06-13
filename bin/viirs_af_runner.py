@@ -217,19 +217,19 @@ def publish_af(publisher, result_files, mda, **kwargs):
         if '{' and '}' in topic:
             try:
                 pt = compose(topic, to_send)
-            except Exception as e:  # noqa
-                LOG.debug("Sift topic failed: {} {}".format(topic, to_send, e))
+            except KeyError as ke:  # noqa
+                LOG.debug("Sift topic failed: {} {} {}".format(topic, to_send, ke))
                 LOG.debug("Be sure to only use available keys.")
                 raise
         else:
             pt = '/'.join(('',
-                          topic,
-                          to_send['format'],
-                          to_send['data_processing_level'],
-                          site,
-                          environment,
-                          'polar',
-                          'direct_readout'))
+                           topic,
+                           to_send['format'],
+                           to_send['data_processing_level'],
+                           site,
+                           environment,
+                           'polar',
+                           'direct_readout'))
 
         LOG.debug('Publish topic = %s', pt)
         msg = Message(pt, "dataset", to_send).encode()
