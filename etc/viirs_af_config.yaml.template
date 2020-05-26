@@ -9,7 +9,7 @@ viirs-ibands:
 
   areas_of_interest: [euron1]
   message_types: ['/segment/SDR/1B']
-  publish_topic: ['/VIIRS/L2/AF']
+  publish_topic: ['VIIRS/L2/AFI']
   instrument: 'viirs'
   viirs_af_call: cspp_active_fire_noaa.sh
   num_of_cpus: 4
@@ -30,7 +30,7 @@ viirs-mbands:
 
   areas_of_interest: [euron1]
   message_types: ['/segment/SDR/1B']
-  publish_topic: ['/VIIRS/L2/AF']
+  publish_topic: ['VIIRS/L2/AFM']
   instrument: viirs
   viirs_af_call: cspp_active_fire_noaa.sh
   num_of_cpus: 4
