@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright (c) 2019 Pytroll
+# Copyright (c) 2019, 2020 Pytroll
 
 # Author(s):
 
@@ -65,7 +65,7 @@ def deliver_output_files(affiles, base_dir, subdir=None):
 
     if not os.path.exists(path):
         LOG.warning("Directory does not exist - create it: %s", path)
-        os.mkdir(path)
+        os.makedirs(path)
     else:
         LOG.debug("Directory exists: %s", path)
 
