@@ -224,8 +224,8 @@ def publish_af(publisher, result_files, mda, **kwargs):
                                     'direct_readout')),
                           "file", to_send).encode()
 
-    LOG.debug("sending: " + str(msg))
-    publisher.send(msg)
+            LOG.debug("sending: " + str(msg))
+            publisher.send(msg)
 
 
 def viirs_active_fire_runner(options, service_name):
