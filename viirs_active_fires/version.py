@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright (c) 2019 Adam.Dybbroe
+# Copyright (c) 2019, 2020 Adam.Dybbroe
 
 # Author(s):
 
@@ -23,4 +23,4 @@
 """Version file.
 """
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
