@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright (c) 2019 Adam.Dybbroe
+# Copyright (c) 2019, 2020 Adam.Dybbroe
 
 # Author(s):
 
@@ -20,14 +20,20 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""
-"""
+"""Package initializer for viirs_active_fires."""
 
+from pkg_resources import get_distribution, DistributionNotFound
 import yaml
 try:
     from yaml import UnsafeLoader
 except ImportError:
     from yaml import Loader as UnsafeLoader
+
+try:
+    __version__ = get_distribution(__name__).version
+except DistributionNotFound:
+    # package is not installed
+    pass
 
 
 def get_config(configfile, service, procenv):

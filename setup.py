@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright (c) 2019 Pytroll
+# Copyright (c) 2019, 2020 Pytroll
 
 # Author(s):
 
@@ -23,15 +23,16 @@
 """
 """
 
-
 from setuptools import setup
-import imp
-
-version = imp.load_source(
-    'viirs_active_fires.version', 'viirs_active_fires/version.py')
+try:
+    # HACK: https://github.com/pypa/setuptools_scm/issues/190#issuecomment-351181286
+    # Stop setuptools_scm from including all repository files
+    import setuptools_scm.integration
+    setuptools_scm.integration.find_files = lambda _: []
+except ImportError:
+    pass
 
 setup(name="pytroll-active-fire-runner",
-      version=version.__version__,
       description='Pytroll runner for the VIIRS active fires',
       author='Adam Dybroe',
       author_email='adam.dybroe@smhi.se',
@@ -48,4 +49,5 @@ setup(name="pytroll-active-fire-runner",
       data_files=[],
       zip_safe=False,
       install_requires=['posttroll'],
+      use_scm_version=True,
       )

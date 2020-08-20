@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright (c) 2019 Pytroll
+# Copyright (c) 2019, 2020 Pytroll
 
 # Author(s):
 
@@ -172,7 +172,7 @@ def spawn_cspp(sdrfiles, service):
 
 
 def publish_af(publisher, result_files, mda, **kwargs):
-    """Publish the messages that SDR files are ready
+    """Publish the messages that VIIRS AF EDR files are ready
     """
     if not result_files:
         return
@@ -189,38 +189,43 @@ def publish_af(publisher, result_files, mda, **kwargs):
         to_send["orig_orbit_number"] = to_send["orbit_number"]
         to_send["orbit_number"] = kwargs['orbit']
 
-    to_send["dataset"] = []
-    for result_file in result_files:
-        filename = os.path.basename(result_file)
-        to_send[
-            'dataset'].append({'uri': urlunsplit(('ssh', socket.gethostname(),
-                                                  result_file, '', '')),
-                               'uid': filename})
-
     publish_topic = kwargs.get('publish_topic', 'Unknown')
     site = kwargs.get('site', 'unknown')
     environment = kwargs.get('environment', 'unknown')
 
-    to_send['format'] = 'EDR'
-    to_send['type'] = 'NETCDF'
     to_send['data_processing_level'] = '2'
-    to_send['start_time'], to_send['end_time'] = get_edr_times(filename)
+    to_send['format'] = 'edr'
 
-    LOG.debug('Site = %s', site)
-    LOG.debug('Publish topic = %s', publish_topic)
-    for topic in publish_topic:
-        msg = Message('/'.join(('',
-                                topic,
-                                to_send['format'],
-                                to_send['data_processing_level'],
-                                site,
-                                environment,
-                                'polar',
-                                'direct_readout')),
-                      "dataset", to_send).encode()
+    for result_file in result_files:
+        to_send['uri'] = urlunsplit(('ssh', socket.gethostname(),
+                                     result_file, '', ''))
+        filename = os.path.basename(result_file)
+        to_send['uid'] = filename
+        if filename.endswith('nc'):
+            to_send['type'] = 'netcdf'
+        elif filename.endswith('txt'):
+            to_send['type'] = 'txt'
+        else:
+            LOG.error("File type unknown! Don't publish. Filename = %s", filename)
+            return
 
-    LOG.debug("sending: " + str(msg))
-    publisher.send(msg)
+        to_send['start_time'], to_send['end_time'] = get_edr_times(filename)
+
+        LOG.debug('Site = %s', site)
+        LOG.debug('Publish topic = %s', publish_topic)
+        for topic in publish_topic:
+            msg = Message('/'.join(('',
+                                    topic,
+                                    to_send['format'],
+                                    to_send['data_processing_level'],
+                                    site,
+                                    environment,
+                                    'polar',
+                                    'direct_readout')),
+                          "file", to_send).encode()
+
+            LOG.debug("sending: " + str(msg))
+            publisher.send(msg)
 
 
 def viirs_active_fire_runner(options, service_name):
