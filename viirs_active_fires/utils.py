@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright (c) 2019, 2020 Pytroll
+# Copyright (c) 2019, 2020, 2021 Pytroll
 
 # Author(s):
 
@@ -87,17 +87,6 @@ def deliver_output_files(affiles, base_dir, subdir=None):
     return retvl
 
 
-def get_local_ips():
-    inet_addrs = [netifaces.ifaddresses(iface).get(netifaces.AF_INET)
-                  for iface in netifaces.interfaces()]
-    ips = []
-    for addr in inet_addrs:
-        if addr is not None:
-            for add in addr:
-                ips.append(add['addr'])
-    return ips
-
-
 def cleanup_cspp_workdir(workdir):
     """Clean up the CSPP working dir after processing"""
 
@@ -115,6 +104,7 @@ def get_edr_times(filename):
     """
     bname = os.path.basename(filename)
     sll = bname.split('_')
+
     start_time = datetime.strptime(sll[2] + sll[3][:-1],
                                    "d%Y%m%dt%H%M%S")
     end_time = datetime.strptime(sll[2] + sll[4][:-1],

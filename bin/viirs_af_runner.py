@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright (c) 2019, 2020 Pytroll
+# Copyright (c) 2019, 2020, 2021 Pytroll
 
 # Author(s):
 
@@ -36,8 +36,11 @@ import socket
 import six
 import time
 
-from viirs_active_fires.utils import (deliver_output_files, get_local_ips, cleanup_cspp_workdir,
+from viirs_active_fires.utils import (deliver_output_files, cleanup_cspp_workdir,
                                       get_edr_times, get_active_fire_result_files)
+
+# from posttroll.adress_receiver import get_local_ips
+# NOT used at the moment...
 
 if six.PY2:
     from urlparse import urlparse
