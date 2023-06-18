@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright (c) 2019, 2020, 2021 Pytroll
+# Copyright (c) 2019 - 2023 Pytroll
 
 # Author(s):
 
@@ -20,8 +20,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Level-2 CSPP VIIRS Active Fire runner. From VIIRS SDRs it generates Active
-Fire outputs on I- and/or M-bands.
+"""Level-2 CSPP VIIRS Active Fire runner.
+
+From VIIRS SDRs it generates Active Fire outputs on I- and/or M-bands.
 
 """
 
@@ -32,27 +33,14 @@ from viirs_active_fires import get_config
 import posttroll.subscriber
 from posttroll.publisher import Publish
 from posttroll.message import Message
-import socket
-import six
 import time
 
 from viirs_active_fires.utils import (deliver_output_files, cleanup_cspp_workdir,
                                       get_edr_times, get_active_fire_result_files)
 
-# from posttroll.adress_receiver import get_local_ips
-# NOT used at the moment...
+from urllib.parse import urlparse
 
-if six.PY2:
-    from urlparse import urlparse
-    from urlparse import urlunsplit
-elif six.PY3:
-    from urllib.parse import urlparse
-    from urllib.parse import urlunsplit
-
-if six.PY2:
-    ptimer = time.clock
-elif six.PY3:
-    ptimer = time.perf_counter
+ptimer = time.perf_counter
 
 #: Default time format
 _DEFAULT_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
@@ -65,15 +53,14 @@ PATH = os.environ.get('PATH', '')
 CSPP_AF_HOME = os.environ.get("CSPP_ACTIVE_FIRE_HOME", '')
 CSPP_AF_WORKDIR = os.environ.get("CSPP_ACTIVE_FIRE_WORKDIR", '')
 
+VIIRS_SATELLITES = ['Suomi-NPP', 'NOAA-20', 'NOAA-21', 'NOAA-22']
+
 
 class ViirsActiveFiresProcessor(object):
-
-    """
-    Container for the VIIRS Active Fires processing based on CSPP
-
-    """
+    """Container for the VIIRS Active Fires processing based on CSPP."""
 
     def __init__(self, ncpus):
+        """Initialize the VIIRS Active Fires Processing instance."""
         from multiprocessing.pool import ThreadPool
         self.pool = ThreadPool(ncpus)
         self.ncpus = ncpus
@@ -92,7 +79,7 @@ class ViirsActiveFiresProcessor(object):
         self.service = None
 
     def initialise(self, service):
-        """Initialise the processor"""
+        """Initialise the processor."""
         self.cspp_results = []
         self.pass_start_time = None
         self.result_files = []
@@ -100,22 +87,24 @@ class ViirsActiveFiresProcessor(object):
         self.service = service
 
     def deliver_output_files(self, subd=None):
+        """Deliver the output files."""
         LOG.debug("Result files: %s", str(self.result_files))
         LOG.debug("Result home dir: %s", str(self.result_home))
         LOG.debug("Sub directory: %s", subd)
         return deliver_output_files(self.result_files, self.result_home, subd)
 
     def run(self, msg):
-        """Start the VIIRS Active Fires processing using CSPP on one sdr granule"""
-
+        """Start the VIIRS Active Fires processing using CSPP on one sdr granule."""
         if msg:
             LOG.debug("Received message: " + str(msg))
-        elif msg and ('platform_name' not in msg.data or 'sensor' not in msg.data):
+
+        if msg and ('platform_name' not in msg.data or 'sensor' not in msg.data):
             LOG.debug("No platform_name or sensor in message. Continue...")
             return True
         elif msg and not (msg.data['platform_name'] in VIIRS_SATELLITES and
                           msg.data['sensor'] == 'viirs'):
-            LOG.info("Not a VIIRS scene. Continue...")
+            LOG.info("Not a supported VIIRS scene. Satellite = %s - Continue...",
+                     str(msg.data['platform_name']))
             return True
 
         self.platform_name = str(msg.data['platform_name'])
@@ -127,19 +116,8 @@ class ViirsActiveFiresProcessor(object):
             return True
 
         sdr_dataset = msg.data['dataset']
-
         if len(sdr_dataset) < 1:
             return True
-
-        # sdr = sdr_dataset[0]
-        # urlobj = urlparse(sdr['uri'])
-        # LOG.debug("Server = " + str(urlobj.netloc))
-        # url_ip = socket.gethostbyname(urlobj.netloc)
-        # if url_ip not in get_local_ips():
-        #     LOG.warning(
-        #         "Server %s not the current one: %s" % (str(urlobj.netloc),
-        #                                                socket.gethostname()))
-        #     return True
 
         sdr_files = []
         for sdr in sdr_dataset:
@@ -157,8 +135,7 @@ class ViirsActiveFiresProcessor(object):
 
 
 def spawn_cspp(sdrfiles, service):
-    """Spawn a CSPP AF run on the set of SDR files given"""
-
+    """Spawn a CSPP AF run on the set of SDR files given."""
     LOG.info("Start CSPP: SDR files = " + str(sdrfiles))
     working_dir = run_cspp_viirs_af(sdrfiles, service)
     LOG.info("CSPP SDR Active Fires processing finished...")
@@ -174,17 +151,16 @@ def spawn_cspp(sdrfiles, service):
     return working_dir, result_files
 
 
-def publish_af(publisher, result_files, mda, **kwargs):
-    """Publish the messages that VIIRS AF EDR files are ready
-    """
-    if not result_files:
+def publish_af(publisher, edr_files, mda, **kwargs):
+    """Publish the messages that VIIRS AF EDR files are ready."""
+    if not edr_files:
         return
 
     # Now publish:
     to_send = mda.copy()
     # Delete the SDR dataset from the message:
     try:
-        del(to_send['dataset'])
+        del (to_send['dataset'])
     except KeyError:
         LOG.warning("Couldn't remove dataset from message")
 
@@ -199,10 +175,9 @@ def publish_af(publisher, result_files, mda, **kwargs):
     to_send['data_processing_level'] = '2'
     to_send['format'] = 'edr'
 
-    for result_file in result_files:
-        to_send['uri'] = urlunsplit(('ssh', socket.gethostname(),
-                                     result_file, '', ''))
-        filename = os.path.basename(result_file)
+    for viirs_edr in edr_files:
+        to_send['uri'] = viirs_edr
+        filename = os.path.basename(viirs_edr)
         to_send['uid'] = filename
         if filename.endswith('nc'):
             to_send['type'] = 'netcdf'
@@ -232,7 +207,7 @@ def publish_af(publisher, result_files, mda, **kwargs):
 
 
 def viirs_active_fire_runner(options, service_name):
-    """The live runner for the CSPP VIIRS AF product generation"""
+    """Start the live runner for the CSPP VIIRS AF product generation."""
     from multiprocessing import cpu_count
 
     LOG.info("Start the VIIRS active fire runner...")
@@ -249,7 +224,6 @@ def viirs_active_fire_runner(options, service_name):
 
             while True:
                 viirs_af_proc.initialise(service_name)
-                # for msg in subscr.recv(timeout=300):
                 for msg in subscr.recv():
                     status = viirs_af_proc.run(msg)
                     if not status:
@@ -272,15 +246,17 @@ def viirs_active_fire_runner(options, service_name):
                                environment=viirs_af_proc.environment,
                                site=viirs_af_proc.site)
 
-                LOG.info("SDR processing has completed.")
+                LOG.info("Active Fires EDR processing has completed.")
 
     return
 
 
 def run_cspp_viirs_af(viirs_sdr_files, service):
-    """A wrapper for the CSPP VIIRS Active Fire algorithm"""
+    """Run the CSPP VIIRS AF algorithm.
 
-    from subprocess import Popen, PIPE, STDOUT
+    A wrapper for the CSPP VIIRS Active Fire algorithm.
+    """
+    from subprocess import Popen, PIPE
     import time
     import tempfile
 
@@ -333,10 +309,9 @@ def run_cspp_viirs_af(viirs_sdr_files, service):
 
 
 def get_arguments():
-    """
-    Get command line arguments
-    Return
-    name of the service and the config filepath
+    """Get command line arguments.
+
+    Return name of the service and the config filepath.
     """
     import argparse
 
