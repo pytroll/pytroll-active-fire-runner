@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright (c) 2019, 2020 Adam.Dybbroe
+# Copyright (c) 2019, 2020, 2024 Adam.Dybbroe
 
 # Author(s):
 
@@ -23,35 +23,9 @@
 """Package initializer for viirs_active_fires."""
 
 from pkg_resources import get_distribution, DistributionNotFound
-import yaml
-try:
-    from yaml import UnsafeLoader
-except ImportError:
-    from yaml import Loader as UnsafeLoader
 
 try:
     __version__ = get_distribution(__name__).version
 except DistributionNotFound:
     # package is not installed
     pass
-
-
-def get_config(configfile, service, procenv):
-    """Get the configuration from file"""
-
-    with open(configfile, 'r') as fp_:
-        config = yaml.load(fp_, Loader=UnsafeLoader)
-
-    options = {}
-    for item in config:
-        if not isinstance(config[item], dict):
-            options[item] = config[item]
-        elif item in [service]:
-            for key in config[service]:
-                if not isinstance(config[service][key], dict):
-                    options[key] = config[service][key]
-                elif key in [procenv]:
-                    for memb in config[service][key]:
-                        options[memb] = config[service][key][memb]
-
-    return options
